@@ -1,0 +1,633 @@
+<channel version="3.6.1">
+  <id>b38ea170-c8c2-4d10-b91e-e455b0950e18</id>
+  <nextMetaDataId>2</nextMetaDataId>
+  <name>aed-storing-channel</name>
+  <description></description>
+  <revision>33</revision>
+  <sourceConnector version="3.6.1">
+    <metaDataId>0</metaDataId>
+    <name>sourceConnector</name>
+    <properties class="com.mirth.connect.connectors.js.JavaScriptReceiverProperties" version="3.6.1">
+      <pluginProperties/>
+      <pollConnectorProperties version="3.6.1">
+        <pollingType>INTERVAL</pollingType>
+        <pollOnStart>false</pollOnStart>
+        <pollingFrequency>5000</pollingFrequency>
+        <pollingHour>0</pollingHour>
+        <pollingMinute>0</pollingMinute>
+        <cronJobs/>
+        <pollConnectorPropertiesAdvanced>
+          <weekly>true</weekly>
+          <inactiveDays>
+            <boolean>false</boolean>
+            <boolean>false</boolean>
+            <boolean>false</boolean>
+            <boolean>false</boolean>
+            <boolean>false</boolean>
+            <boolean>false</boolean>
+            <boolean>false</boolean>
+            <boolean>false</boolean>
+          </inactiveDays>
+          <dayOfMonth>1</dayOfMonth>
+          <allDay>true</allDay>
+          <startingHour>8</startingHour>
+          <startingMinute>0</startingMinute>
+          <endingHour>17</endingHour>
+          <endingMinute>0</endingMinute>
+        </pollConnectorPropertiesAdvanced>
+      </pollConnectorProperties>
+      <sourceConnectorProperties version="3.6.1">
+        <responseVariable>None</responseVariable>
+        <respondAfterProcessing>true</respondAfterProcessing>
+        <processBatch>false</processBatch>
+        <firstResponse>false</firstResponse>
+        <processingThreads>1</processingThreads>
+        <resourceIds class="linked-hash-map">
+          <entry>
+            <string>Default Resource</string>
+            <string>[Default Resource]</string>
+          </entry>
+        </resourceIds>
+        <queueBufferSize>1000</queueBufferSize>
+      </sourceConnectorProperties>
+      <script>importPackage(Packages.org.apache.http.client);
+importPackage(Packages.org.apache.http.client.methods);
+importPackage(Packages.org.apache.http.impl.client);
+
+try {
+  var aedStagingRepo = getAEDStagingRepo();
+  aedStagingRepo.open();
+
+  var registryItems = aedStagingRepo.getItemsByStatus(&quot;unprocessed&quot;,configurationMap.get(&quot;message-chunk-count&quot;));
+  var messages = getMessages();
+
+  aedStagingRepo.close();
+  return messages;
+}catch(err)
+{
+  logger.error(err);
+  return;
+}
+
+function getAEDStagingRepo() {
+  var stagingConfigStream = new java.io.FileInputStream(configurationMap.get(&quot;staging-settings&quot;));
+  var aedStagingRepo = new Packages.com.philips.hsc.external.staging.AedStagingRepository(stagingConfigStream);
+  return aedStagingRepo;
+}
+
+function getMessages() {
+var messages = new java.util.ArrayList();
+var itemCount = registryItems.size();
+  for(var index=0; index &lt; itemCount; ++index) {
+    var registryItem = registryItems.get(index);
+    addMessage(messages,registryItem);
+  }
+  return messages;
+}
+
+function addMessage(messages, registryItem) {
+	logger.info(&quot;-------------------------  json: &quot;+registryItem.getJsonData());
+	logger.info(&quot;before adding msg-------------------------------&quot;);
+	
+	logger.info(&quot;before mapping: &quot;+registryItem.getMappingIdentifier());
+  var fhirMapping = new Packages.com.philips.hsc.dataaccess.FhirResourceIdMapperAed(registryItem.getMappingIdentifier());
+  logger.info(&quot;registry item: &quot;+registryItem);
+  logger.info(&quot;source id:&quot;+registryItem.getSourceIdentifier());
+  logger.info(&quot;bundle id:&quot;+fhirMapping.getBundleId());
+  logger.info(&quot;source global map iden: &quot;+registryItem.getSourceIdentifier());
+  logger.info(&quot;source global map mapping: &quot;+fhirMapping);
+  globalChannelMap.put(registryItem.getSourceIdentifier(),fhirMapping);
+  logger.info(&quot;source global map bundle: &quot;+fhirMapping.getBundleId());
+  logger.info(&quot;source global map bundle: &quot;+registryItem);
+  globalChannelMap.put(fhirMapping.getBundleId(),registryItem);
+  messages.add(registryItem.getJsonData());
+}
+</script>
+    </properties>
+    <transformer version="3.6.1">
+      <elements>
+        <com.mirth.connect.plugins.javascriptstep.JavaScriptStep>
+          <sequenceNumber>0</sequenceNumber>
+          <script>logger.info(&quot;AedId: &quot;+msg[&apos;AedId&apos;]);
+logger.info(&quot;Object:&quot;+globalChannelMap.get(msg[&apos;AedId&apos;]));
+var fhirMapping = (Packages.com.philips.hsc.dataaccess.FhirResourceIdMapperAed)(globalChannelMap.get(msg[&apos;AedId&apos;]));
+logger.info(&quot;--------------transfomer fhirmappingId: &quot;+fhirMapping.getDeviceId());
+logger.info(&quot;global channel msg: &quot;+globalChannelMap.get(msg[&apos;AedId&apos;]));
+tmp[&apos;id&apos;] = fhirMapping.getBundleId();</script>
+        </com.mirth.connect.plugins.javascriptstep.JavaScriptStep>
+        <com.mirth.connect.plugins.javascriptstep.JavaScriptStep>
+          <sequenceNumber>1</sequenceNumber>
+          <script>var fhirMapping = (Packages.com.philips.hsc.dataaccess.FhirResourceIdMapperAed)(globalChannelMap.get(msg[&apos;AedId&apos;]));
+
+
+
+logger.info(&quot;*********************************Location************************&quot;);
+tmp[&apos;entry&apos;][0][&apos;resource&apos;][&apos;id&apos;] = fhirMapping.getLocationId();
+tmp[&apos;entry&apos;][0][&apos;request&apos;][&apos;url&apos;] = &quot;/Location/&quot;+fhirMapping.getLocationId();
+tmp[&apos;entry&apos;][0][&apos;fullUrl&apos;] = &quot;/Location/&quot;+fhirMapping.getLocationId();
+tmp[&apos;entry&apos;][0][&apos;resource&apos;][&apos;address&apos;][0][&apos;text&apos;] = msg[&apos;HouseNumber&apos;]+&quot; &quot;+msg[&apos;Address1&apos;]+&quot; &quot;+msg[&apos;Address2&apos;]+&quot; &quot;+msg[&apos;Address3&apos;];
+logger.info(&quot;*********************************Location************************&quot;);
+
+logger.info(&quot;*********************************Device************************&quot;);
+tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;id&apos;] = fhirMapping.getDeviceId();
+tmp[&apos;entry&apos;][1][&apos;fullUrl&apos;] = &quot;/Device/&quot;+fhirMapping.getDeviceId();
+tmp[&apos;entry&apos;][1][&apos;request&apos;][&apos;url&apos;] = &quot;/Device/&quot;+fhirMapping.getDeviceId();
+tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;status&apos;] = msg[&apos;DeviceStatus&apos;].toLowerCase();
+tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;location&apos;][0][&apos;reference&apos;] = &quot;Location/&quot;+fhirMapping.getLocationId();
+logger.info(&quot;*********************************Device************************&quot;);
+
+logger.info(&quot;*********************************Volunteer************************&quot;);
+if(msg[&apos;Volunteer&apos;] != null){
+tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;extension&apos;][3][&apos;valueHumanName&apos;][0][&apos;given&apos;] = msg[&apos;Volunteer&apos;][&apos;FirstName&apos;];
+tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;extension&apos;][3][&apos;valueHumanName&apos;][0][&apos;family&apos;] = msg[&apos;Volunteer&apos;][&apos;LastName&apos;];
+tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;contact&apos;][0][&apos;system&apos;] = &quot;phone&quot;;
+tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;contact&apos;][0][&apos;value&apos;] = msg[&apos;Volunteer&apos;][&apos;MobileNumber&apos;];
+tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;contact&apos;][0][&apos;system&apos;] = &quot;email&quot;;
+tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;contact&apos;][0][&apos;value&apos;] = msg[&apos;Volunteer&apos;][&apos;Email&apos;];
+}
+logger.info(&quot;*********************************Volunteer************************&quot;);
+
+logger.info(&quot;*********************************Battery************************&quot;);
+tmp[&apos;entry&apos;][2][&apos;fullUrl&apos;] = &quot;/DeviceComponent/&quot;+fhirMapping.getDeviceComponent1Id();
+tmp[&apos;entry&apos;][2][&apos;resource&apos;][&apos;id&apos;] = fhirMapping.getDeviceComponent1Id();
+tmp[&apos;entry&apos;][2][&apos;request&apos;][&apos;url&apos;] = &quot;/DeviceComponent/&quot;+fhirMapping.getDeviceComponent1Id();
+tmp[&apos;entry&apos;][2][&apos;resource&apos;][&apos;source&apos;][&apos;reference&apos;] = &quot;Device/&quot;+fhirMapping.getDeviceId();
+tmp[&apos;entry&apos;][2][&apos;resource&apos;][&apos;type&apos;][&apos;text&apos;] = &quot;Battery&quot;;
+logger.info(&quot;*********************************Battery************************&quot;);
+
+logger.info(&quot;*********************************Electrode************************&quot;);
+tmp[&apos;entry&apos;][3][&apos;fullUrl&apos;] = &quot;/DeviceComponent/&quot;+fhirMapping.getDeviceComponent2Id();
+tmp[&apos;entry&apos;][3][&apos;resource&apos;][&apos;id&apos;] = fhirMapping.getDeviceComponent2Id();
+tmp[&apos;entry&apos;][3][&apos;request&apos;][&apos;url&apos;] = &quot;/DeviceComponent/&quot;+fhirMapping.getDeviceComponent2Id();
+tmp[&apos;entry&apos;][3][&apos;resource&apos;][&apos;source&apos;][&apos;reference&apos;] = &quot;Device/&quot;+fhirMapping.getDeviceId();
+tmp[&apos;entry&apos;][3][&apos;resource&apos;][&apos;type&apos;][&apos;text&apos;] = &quot;Electrode&quot;;
+logger.info(&quot;*********************************Electrode************************&quot;);</script>
+        </com.mirth.connect.plugins.javascriptstep.JavaScriptStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [1] - resource - identifier [0] - value (out) &lt;-- SerialNumber (in)</name>
+          <sequenceNumber>2</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;identifier&apos;][0][&apos;value&apos;]</messageSegment>
+          <mapping>msg[&apos;SerialNumber&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [1] - resource - type - text -  (out) &lt;-- AedType (in)</name>
+          <sequenceNumber>3</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;type&apos;][&apos;text&apos;]</messageSegment>
+          <mapping>msg[&apos;AedType&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [1] - resource - extension [1] - valueBoolean (out) &lt;-- IsPublic (in)</name>
+          <sequenceNumber>4</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;extension&apos;][1][&apos;valueBoolean&apos;]</messageSegment>
+          <mapping>msg[&apos;IsPublic&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [1] - resource - extension [2] - valueHumanName [0] - given (out) &lt;-- SpottedBy (in)</name>
+          <sequenceNumber>5</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][1][&apos;resource&apos;][&apos;extension&apos;][2][&apos;valueHumanName&apos;][0][&apos;given&apos;]</messageSegment>
+          <mapping>msg[&apos;SpottedBy&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [0] - resource - address [0] - line [0] -  (out) &lt;-- HouseNumber (in)</name>
+          <sequenceNumber>6</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][0][&apos;resource&apos;][&apos;address&apos;][0][&apos;line&apos;][0]</messageSegment>
+          <mapping>msg[&apos;HouseNumber&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [0] - resource - address [0] - line [1] -  (out) &lt;-- Address1 (in)</name>
+          <sequenceNumber>7</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][0][&apos;resource&apos;][&apos;address&apos;][0][&apos;line&apos;][1]</messageSegment>
+          <mapping>msg[&apos;Address1&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [0] - resource - address [0] - line [2] -  (out) &lt;-- Address2 (in)</name>
+          <sequenceNumber>8</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][0][&apos;resource&apos;][&apos;address&apos;][0][&apos;line&apos;][2]</messageSegment>
+          <mapping>msg[&apos;Address2&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [0] - resource - address [0] - line [3] -  (out) &lt;-- HouseNumber (in)</name>
+          <sequenceNumber>9</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][0][&apos;resource&apos;][&apos;address&apos;][0][&apos;line&apos;][3]</messageSegment>
+          <mapping>msg[&apos;HouseNumber&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [0] - resource - address [0] - city (out) &lt;-- City (in)</name>
+          <sequenceNumber>10</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][0][&apos;resource&apos;][&apos;address&apos;][0][&apos;city&apos;]</messageSegment>
+          <mapping>msg[&apos;City&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [0] - resource - address [0] - postalCode (out) &lt;-- Zip (in)</name>
+          <sequenceNumber>11</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][0][&apos;resource&apos;][&apos;address&apos;][0][&apos;postalCode&apos;]</messageSegment>
+          <mapping>msg[&apos;Zip&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [0] - resource - address [0] - country (out) &lt;-- CountryCode (in)</name>
+          <sequenceNumber>12</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][0][&apos;resource&apos;][&apos;address&apos;][0][&apos;country&apos;]</messageSegment>
+          <mapping>msg[&apos;CountryCode&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [0] - resource - position - longitude (out) &lt;-- Longitude (in)</name>
+          <sequenceNumber>13</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][0][&apos;resource&apos;][&apos;position&apos;][&apos;longitude&apos;]</messageSegment>
+          <mapping>msg[&apos;Longitude&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [0] - resource - position - latitude (out) &lt;-- Latitude (in)</name>
+          <sequenceNumber>14</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][0][&apos;resource&apos;][&apos;position&apos;][&apos;latitude&apos;]</messageSegment>
+          <mapping>msg[&apos;Latitude&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [2] - resource - extension [0] - valueDate (out) &lt;-- BatteryBestBefore (in)</name>
+          <sequenceNumber>15</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][2][&apos;resource&apos;][&apos;extension&apos;][0][&apos;valueDate&apos;]</messageSegment>
+          <mapping>msg[&apos;BatteryBestBefore&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+        <com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+          <name>entry [3] - resource - extension [0] - valueDate (out) &lt;-- ElectrodesBestBefore (in)</name>
+          <sequenceNumber>16</sequenceNumber>
+          <messageSegment>tmp[&apos;entry&apos;][3][&apos;resource&apos;][&apos;extension&apos;][0][&apos;valueDate&apos;]</messageSegment>
+          <mapping>msg[&apos;ElectrodesBestBefore&apos;]</mapping>
+          <defaultValue></defaultValue>
+          <replacements/>
+        </com.mirth.connect.plugins.messagebuilder.MessageBuilderStep>
+      </elements>
+      <inboundTemplate encoding="base64">eyJBZWRJZCI6MjEzMiwiQWVkVHlwZSI6IkRlZmlidGVjaCBMaWZlbGluZSIsIkRlc2NyaXB0aW9u
+IjoiQmlubmVuIiwiUHVyY2hhc2VEYXRlIjoiMjAxMS0wNC0yN1QwMDowMDowMCIsIkFkZHJlc3Mx
+IjoiTS5BLiBkZSBSdXl0ZXJzdHJhYXQiLCJBZGRyZXNzMiI6bnVsbCwiQWRkcmVzczMiOm51bGws
+IkhvdXNlTnVtYmVyIjo1NiwiSG91c2VOdW1iZXJFeCI6IiIsIkNpdHkiOiJIZW5nZWxvIG92Iiwi
+WmlwIjoiNzU1NkNaIiwiQ291bnRyeUNvZGUiOiJOTCIsIkFlZEF2YWlsYWJsZVdlZWtEYXlzIjpu
+dWxsLCJCYXR0ZXJ5QmVzdEJlZm9yZSI6IjIwMTctMDctMDFUMDA6MDA6MDAiLCJTZWN1cml0eSI6
+IkdlZW4iLCJTZWN1cml0eUNvZGUiOiJHZWVuIiwiU2VyaWFsTnVtYmVySHNsIjoiMTA2MDE0ODM5
+IiwiU2VyaWFsTnVtYmVyIjoiIiwiRWxlY3Ryb2Rlc0Jlc3RCZWZvcmUiOiIyMDE3LTA3LTAxVDAw
+OjAwOjAwIiwiQWVkTWVkaWFzIjpudWxsLCJWb2x1bnRlZXIiOm51bGwsIkRldmljZVN0YXR1cyI6
+IkFjdGl2ZSIsIlNwb3R0ZWRCeSI6bnVsbCwiTmV4dFJlbWluZGVyIjoiMjAxNy0wNy0wMVQwMDow
+MDowMCIsIklzUHVibGljIjpudWxsLCJJc1BoQXZhaWxhYmlsaXR5IjpudWxsLCJQbGF0ZWZvcm1L
+ZXlDcmVhdGUiOm51bGwsIlBsYXRlZm9ybUtleU1vZGlmeSI6bnVsbCwiTGF0aXR1ZGUiOjUyLjI3
+MTY1LCJMb25naXR1ZGUiOjYuODAxNzMsIlVzZXJJZCI6bnVsbCwiSXNEZWxldGVkIjpmYWxzZSwi
+TW9kaWZpZWREYXRlIjoiMjAxNi0wNC0xOVQxNzo0MDo1OS42NzciLCJNb2RpZmllZEJ5IjoiSW1w
+b3J0IiwiQ3JlYXRlZERhdGUiOiIyMDE2LTA0LTE5VDE4OjQxOjE1IiwiQ3JlYXRlZEJ5IjoiSW1w
+b3J0In0=</inboundTemplate>
+      <outboundTemplate encoding="base64">ewogICJyZXNvdXJjZVR5cGUiIDogIkJ1bmRsZSIsCiAgInR5cGUiIDogInRyYW5zYWN0aW9uIiwK
+ICAiZW50cnkiIDogWwogICAgewogICAgICAiZnVsbFVybCIgOiAiL0xvY2F0aW9uLzhmZjMyMDZk
+LTg2N2MtNDc2OS05ZDdmLTFkNTIwNzc4OTVlNCIsCiAgICAgICJyZXNvdXJjZSIgOiB7CiAgICAg
+ICAgInJlc291cmNlVHlwZSIgOiAiTG9jYXRpb24iLAogICAgICAgICJpZCIgOiAiOGZmMzIwNmQt
+ODY3Yy00NzY5LTlkN2YtMWQ1MjA3Nzg5NWU0IiwKICAgICAgICAiYWRkcmVzcyIgOiBbCiAgICAg
+ICAgICB7CiAgICAgICAgICAgICJ1c2UiIDogIiIsCiAgICAgICAgICAgICJsaW5lIiA6IFsKICAg
+ICAgICAgICAgICAiIiwKICAgICAgICAgICAgICAiIiwKICAgICAgICAgICAgICAiIiwKICAgICAg
+ICAgICAgICAiIgogICAgICAgICAgICBdLAoJCQkidGV4dCI6IiIsCiAgICAgICAgICAgICJjaXR5
+IiA6ICIiLAogICAgICAgICAgICAicG9zdGFsQ29kZSIgOiAiIiwKICAgICAgICAgICAgImNvdW50
+cnkiIDogIiIKICAgICAgICAgIH0KICAgICAgICBdLAogICAgICAgICJwb3NpdGlvbiIgOiB7CiAg
+ICAgICAgICAibG9uZ2l0dWRlIiA6IDAsCiAgICAgICAgICAibGF0aXR1ZGUiIDogMCwKICAgICAg
+ICAgICJhbHRpdHVkZSIgOiAwCiAgICAgICAgfSwKICAgICAgICAiaWRlbnRpZmllciIgOiBbCiAg
+ICAgICAgICB7CiAgICAgICAgICAgICJzeXN0ZW0iIDogImh0dHA6Ly9nb29kY2FyZS5vcmcvZGV2
+aWNlcy9pZCIsCiAgICAgICAgICAgICJ2YWx1ZSIgOiAiIgogICAgICAgICAgfQogICAgICAgIF0K
+ICAgICAgfSwKICAgICAgInJlcXVlc3QiIDogewogICAgICAgICJtZXRob2QiIDogIlBVVCIsCiAg
+ICAgICAgInVybCIgOiAiL0xvY2F0aW9uLzhmZjMyMDZkLTg2N2MtNDc2OS05ZDdmLTFkNTIwNzc4
+OTVlNCIKICAgICAgfQogICAgfSwKICAgIHsKICAgICAgImZ1bGxVcmwiIDogIi9EZXZpY2UvMzM2
+MzMxNzgtMWZhOC00NGMyLTkzYmUtODBjOTMzNzUwMjVlIiwKICAgICAgInJlc291cmNlIiA6IHsK
+ICAgICAgICAicmVzb3VyY2VUeXBlIiA6ICJEZXZpY2UiLAogICAgICAgICJsb2NhdGlvbiIgOiBb
+CiAgICAgICAgICB7CiAgICAgICAgICAgICJyZWZlcmVuY2UiIDogIkxvY2F0aW9uLzhmZjMyMDZk
+LTg2N2MtNDc2OS05ZDdmLTFkNTIwNzc4OTVlNCIKICAgICAgICAgIH0KICAgICAgICBdLAogICAg
+ICAgICJ0eXBlIiA6IHsKICAgICAgICAgICJ0ZXh0IjoiQUVEIgogICAgICAgIH0sCiAgICAgICAg
+ImV4dGVuc2lvbiIgOiBbCiAgICAgICAgICB7CiAgICAgICAgICAgICJ1cmwiIDogImh0dHA6Ly9o
+bDcub3JnL2ZoaXIvU3RydWN0dXJlRGVmaW5pdGlvbi9JbWFnZSIsCiAgICAgICAgICAgICJ2YWx1
+ZVN0cmluZyIgOiAiIgogICAgICAgICAgfSwKICAgICAgICAgIHsKICAgICAgICAgICAgInVybCIg
+OiAiaHR0cDovL2hsNy5vcmcvZmhpci9TdHJ1Y3R1cmVEZWZpbml0aW9uL0lzUHVibGljIiwKICAg
+ICAgICAgICAgInZhbHVlQm9vbGVhbiIgOiAiIgogICAgICAgICAgfSwKICAgICAgICAgIHsKICAg
+ICAgICAgICAgInVybCIgOiAiaHR0cDovL2hsNy5vcmcvZmhpci9TdHJ1Y3R1cmVEZWZpbml0aW9u
+L1Nwb3R0ZWRCeSIsCiAgICAgICAgICAgICJ2YWx1ZUh1bWFuTmFtZSIgOiBbCiAgICAgICAgICAg
+ICAgewogICAgICAgICAgICAgICAgInVzZSIgOiAidXN1YWwiLAogICAgICAgICAgICAgICAgImZh
+bWlseSIgOiAiIiwKICAgICAgICAgICAgICAgICJnaXZlbiIgOiAiIgogICAgICAgICAgICAgIH0K
+ICAgICAgICAgICAgXQogICAgICAgICAgfSwKICAgICAgICAgIHsKICAgICAgICAgICAgInVybCIg
+OiAiaHR0cDovL2hsNy5vcmcvZmhpci9TdHJ1Y3R1cmVEZWZpbml0aW9uL1NpdGVDb29yZGluYXRv
+ciIsCiAgICAgICAgICAgICJ2YWx1ZUh1bWFuTmFtZSIgOiBbCiAgICAgICAgICAgICAgewogICAg
+ICAgICAgICAgICAgInVzZSIgOiAidXN1YWwiLAogICAgICAgICAgICAgICAgImZhbWlseSIgOiAi
+IiwKICAgICAgICAgICAgICAgICJnaXZlbiIgOiAiIgogICAgICAgICAgICAgIH0KICAgICAgICAg
+ICAgXQogICAgICAgICAgfQogICAgICAgIF0sCiAgICAgICAgImlkIiA6ICIzMzYzMzE3OC0xZmE4
+LTQ0YzItOTNiZS04MGM5MzM3NTAyNWUiLAogICAgICAgICJpZGVudGlmaWVyIiA6IFsKICAgICAg
+ICAgIHsKICAgICAgICAgICAgInN5c3RlbSIgOiAiaHR0cDovL2dvb2RjYXJlLm9yZy9kZXZpY2Vz
+L2lkIiwKICAgICAgICAgICAgInZhbHVlIiA6ICIiCiAgICAgICAgICB9LAogICAgICAgICAgewog
+ICAgICAgICAgICAidHlwZSIgOiB7CiAgICAgICAgICAgICAgInRleHQiIDogIlNlcmlhbCBOdW1i
+ZXIiCiAgICAgICAgICAgIH0sCiAgICAgICAgICAgICJ2YWx1ZSIgOiAiIgogICAgICAgICAgfQog
+ICAgICAgIF0sCiAgICAgICAgImNvbnRhY3QiIDogWwogICAgICAgICAgewogICAgICAgICAgICAi
+c3lzdGVtIiA6ICJwaG9uZSIsCiAgICAgICAgICAgICJ2YWx1ZSIgOiAiIiwKICAgICAgICAgICAg
+InVzZSIgOiAiIgogICAgICAgICAgfSwKICAgICAgICAgIHsKICAgICAgICAgICAgInN5c3RlbSIg
+OiAiZW1haWwiLAogICAgICAgICAgICAidmFsdWUiIDogIiIsCiAgICAgICAgICAgICJ1c2UiIDog
+IiIKICAgICAgICAgIH0KICAgICAgICBdLAogICAgICAgICJ1ZGkiIDogewogICAgICAgICAgImRl
+dmljZUlkZW50aWZpZXIiIDogIiIsCiAgICAgICAgICAibmFtZSIgOiAiQUVEIiwKICAgICAgICAg
+ICJqdXJpc2RpY3Rpb24iIDogImh0dHA6Ly9kdWJhaS5vcmciLAogICAgICAgICAgImNhcnJpZXJI
+UkYiIDogIiIsCiAgICAgICAgICAiY2FycmllckFJREMiIDogIiIsCiAgICAgICAgICAiaXNzdWVy
+IiA6ICIiLAogICAgICAgICAgImVudHJ5VHlwZSIgOiAiIgogICAgICAgIH0sCiAgICAgICAgInN0
+YXR1cyIgOiAiIgogICAgICB9LAogICAgICAicmVxdWVzdCIgOiB7CiAgICAgICAgIm1ldGhvZCIg
+OiAiUFVUIiwKICAgICAgICAidXJsIiA6ICIvRGV2aWNlLzMzNjMzMTc4LTFmYTgtNDRjMi05M2Jl
+LTgwYzkzMzc1MDI1ZSIKICAgICAgfQogICAgfSwKICAgIHsKICAgICAgImZ1bGxVcmwiIDogIi9E
+ZXZpY2VDb21wb25lbnQvZjY3ZTI0OWEtMjZlNS00MmE4LTk4YTktNzgwMzUzYjczNGQzIiwKICAg
+ICAgInJlc291cmNlIiA6IHsKICAgICAgICAicmVzb3VyY2VUeXBlIiA6ICJEZXZpY2VDb21wb25l
+bnQiLAogICAgICAgICJpZCIgOiAiZjY3ZTI0OWEtMjZlNS00MmE4LTk4YTktNzgwMzUzYjczNGQz
+IiwKICAgICAgICAiaWRlbnRpZmllciIgOiB7CiAgICAgICAgICAidmFsdWUiIDogIiIKICAgICAg
+ICB9LAogICAgICAgICJleHRlbnNpb24iIDogWwogICAgICAgICAgewogICAgICAgICAgICAidXJs
+IiA6ICJodHRwOi8vaGw3Lm9yZy9maGlyL1N0cnVjdHVyZURlZmluaXRpb24vRXhwaXJhdGlvbkRh
+dGUiLAogICAgICAgICAgICAidmFsdWVEYXRlIiA6ICIiCiAgICAgICAgICB9CiAgICAgICAgXSwK
+ICAgICAgICAidHlwZSIgOiB7CiAgICAgICAgICAidGV4dCIgOiAiQmF0dGVyeSIKICAgICAgICB9
+LAogICAgICAgICJzb3VyY2UiIDogewogICAgICAgICAgInJlZmVyZW5jZSIgOiAiRGV2aWNlLzMz
+NjMzMTc4LTFmYTgtNDRjMi05M2JlLTgwYzkzMzc1MDI1ZSIsCiAgICAgICAgICAiZGlzcGxheSIg
+OiAiQUVEIERldmljZSIKICAgICAgICB9CiAgICAgIH0sCiAgICAgICJyZXF1ZXN0IiA6IHsKICAg
+ICAgICAibWV0aG9kIiA6ICJQVVQiLAogICAgICAgICJ1cmwiIDogIi9EZXZpY2VDb21wb25lbnQv
+ZjY3ZTI0OWEtMjZlNS00MmE4LTk4YTktNzgwMzUzYjczNGQzIgogICAgICB9CiAgICB9LAogICAg
+ewogICAgICAiZnVsbFVybCIgOiAiL0RldmljZUNvbXBvbmVudC8yNTI2MDY1Ni0yMWVlLTRlNTIt
+OWI1ZC1kMzhkNDAyNThiMzAiLAogICAgICAicmVzb3VyY2UiIDogewogICAgICAgICJyZXNvdXJj
+ZVR5cGUiIDogIkRldmljZUNvbXBvbmVudCIsCiAgICAgICAgImlkIiA6ICIyNTI2MDY1Ni0yMWVl
+LTRlNTItOWI1ZC1kMzhkNDAyNThiMzAiLAogICAgICAgICJpZGVudGlmaWVyIiA6IHsKICAgICAg
+ICAgICJ2YWx1ZSIgOiAiIgogICAgICAgIH0sCiAgICAgICAgImV4dGVuc2lvbiIgOiBbCiAgICAg
+ICAgICB7CiAgICAgICAgICAgICJ1cmwiIDogImh0dHA6Ly9obDcub3JnL2ZoaXIvU3RydWN0dXJl
+RGVmaW5pdGlvbi9FeHBpcmF0aW9uRGF0ZSIsCiAgICAgICAgICAgICJ2YWx1ZURhdGUiIDogIiIK
+ICAgICAgICAgIH0KICAgICAgICBdLAogICAgICAgICJ0eXBlIiA6IHsKICAgICAgICAgICJ0ZXh0
+IiA6ICJFbGVjdHJvZGUiCiAgICAgICAgfSwKICAgICAgICAic291cmNlIiA6IHsKICAgICAgICAg
+ICJyZWZlcmVuY2UiIDogIkRldmljZS8zMzYzMzE3OC0xZmE4LTQ0YzItOTNiZS04MGM5MzM3NTAy
+NWUiLAogICAgICAgICAgImRpc3BsYXkiIDogIkFFRCBEZXZpY2UiCiAgICAgICAgfQogICAgICB9
+LAogICAgICAicmVxdWVzdCIgOiB7CiAgICAgICAgIm1ldGhvZCIgOiAiUFVUIiwKICAgICAgICAi
+dXJsIiA6ICIvRGV2aWNlQ29tcG9uZW50LzI1MjYwNjU2LTIxZWUtNGU1Mi05YjVkLWQzOGQ0MDI1
+OGIzMCIKICAgICAgfQogICAgfQogIF0sCiAgImlkIiA6ICI4OWQxYTBiNi02MDJlLTQwMzYtYTY2
+MC03NTBjMzgzM2RhNGYiCn0=</outboundTemplate>
+      <inboundDataType>JSON</inboundDataType>
+      <outboundDataType>JSON</outboundDataType>
+      <inboundProperties class="com.mirth.connect.plugins.datatypes.json.JSONDataTypeProperties" version="3.6.1">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.json.JSONBatchProperties" version="3.6.1">
+          <splitType>JavaScript</splitType>
+          <batchScript></batchScript>
+        </batchProperties>
+      </inboundProperties>
+      <outboundProperties class="com.mirth.connect.plugins.datatypes.json.JSONDataTypeProperties" version="3.6.1">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.json.JSONBatchProperties" version="3.6.1">
+          <splitType>JavaScript</splitType>
+          <batchScript></batchScript>
+        </batchProperties>
+      </outboundProperties>
+    </transformer>
+    <filter version="3.6.1">
+      <elements/>
+    </filter>
+    <transportName>JavaScript Reader</transportName>
+    <mode>SOURCE</mode>
+    <enabled>true</enabled>
+    <waitForPrevious>true</waitForPrevious>
+  </sourceConnector>
+  <destinationConnectors>
+    <connector version="3.6.1">
+      <metaDataId>1</metaDataId>
+      <name>Destination 1</name>
+      <properties class="com.mirth.connect.connectors.js.JavaScriptDispatcherProperties" version="3.6.1">
+        <pluginProperties/>
+        <destinationConnectorProperties version="3.6.1">
+          <queueEnabled>false</queueEnabled>
+          <sendFirst>false</sendFirst>
+          <retryIntervalMillis>10000</retryIntervalMillis>
+          <regenerateTemplate>false</regenerateTemplate>
+          <retryCount>0</retryCount>
+          <rotate>false</rotate>
+          <includeFilterTransformer>false</includeFilterTransformer>
+          <threadCount>1</threadCount>
+          <threadAssignmentVariable></threadAssignmentVariable>
+          <validateResponse>false</validateResponse>
+          <resourceIds class="linked-hash-map">
+            <entry>
+              <string>Default Resource</string>
+              <string>[Default Resource]</string>
+            </entry>
+          </resourceIds>
+          <queueBufferSize>1000</queueBufferSize>
+          <reattachAttachments>true</reattachAttachments>
+        </destinationConnectorProperties>
+        <script>importPackage(Packages.org.apache.http.client);
+importPackage(Packages.org.apache.http.client.methods);
+importPackage(Packages.org.apache.http.impl.client);
+importPackage(Packages.org.apache.http.message);
+importPackage(Packages.org.apache.http.client.entity);
+importPackage(Packages.org.apache.http.entity);
+importPackage(Packages.org.apache.http.util);
+importPackage(Packages.org.apache.http.impl.client);
+
+var registrySettings = getRegistrySettings();
+logger.info(&quot;cert path:&quot; +registrySettings.getCertPath());
+logger.info(&quot;x509Url: &quot;+registrySettings.getX509Url());
+var token = getAccessTokenFromIam(registrySettings);
+logger.info(&quot;IAM token: &quot;+token);
+
+var transformedJson = connectorMessage.getRawData();
+logger.info(&quot;transformed: &quot;+transformedJson);
+var messageId = getMessageIdentifier(transformedJson);
+logger.info(&quot;---------------------id: &quot;+messageId);
+storeMesageToCdr(registrySettings,transformedJson,messageId);
+return;
+
+function getRegistrySettings() {
+  var settingsStream = new java.io.FileInputStream(configurationMap.get(&quot;aed-registry-settings&quot;));
+  var registrySettings = new com.philips.hsc.config.RegistrySettings(settingsStream);
+  return registrySettings;
+}
+
+function getAccessTokenFromIam(registrySettings) {
+if(!globalChannelMap.containsKey(&quot;phoenix-token&quot;)){
+	logger.info(&quot;----------------------------- creating new token&quot;);
+	var auth = new Packages.com.philips.hsc.cdrclient.Authentication(registrySettings);
+	token = auth.getToken();
+	globalChannelMap.put(&quot;phoenix-token&quot;,token);
+	}
+else{
+	logger.info(&quot;------------------------ using token from map&quot;);
+	token = globalChannelMap.get(&quot;phoenix-token&quot;);	
+		}
+	logger.info(&quot;--------------token: &quot;+token);
+  return token;
+}
+
+function getMessageIdentifier(transformedJson) {
+  try{
+  var jsonObject = JSON.parse(transformedJson);
+  logger.info(&quot;-----------------json: &quot;+jsonObject.toString());
+  logger.info(&quot;-----------------jsonId: &quot;+jsonObject.id);
+  return jsonObject.id;}
+  catch(err){
+  	logger.error(err);
+  	}
+}
+
+function storeMesageToCdr(registrySettings,transformedJson,messageId) {
+  var cdrClient = new Packages.com.philips.hsc.cdrclient.CdrClient(registrySettings);
+  var resp;
+  try {
+  	logger.info(&quot;Storing to CDR...&quot;);
+	resp = cdrClient.createResource(token,&quot;&quot;,transformedJson);
+	logger.info(&quot;-----------------------&quot;+resp);
+	logger.info(&quot;response: &quot;+resp);
+	if(resp == org.springframework.http.HttpStatus.OK) {
+	  updateStagingRepo(messageId);
+	}
+	else if(resp == org.springframework.http.HttpStatus.UNAUTHORIZED){
+		refreshToken(registrySettings);
+	}
+   } catch(err) {
+   	logger.info(&quot;error-------------------------------:  &quot;+err+&quot;  :-----------------&quot;);
+   }
+}
+
+function refreshToken(registrySettings){
+	logger.info(&quot;------------------deleting older token from map&quot;);
+	globalChannelMap.remove(&quot;phoenix-token&quot;);
+	token = getAccessTokenFromIam(registrySettings);
+}
+
+function updateStagingRepo(messageId) {
+  var aedStagingRepo = getStagingRepo();
+  aedStagingRepo.open();
+  var registryItem = prepareRegistryItem(messageId);
+  aedStagingRepo.update(registryItem);
+  aedStagingRepo.close();
+}
+
+function getStagingRepo() {
+  var stagingConfigStream = new java.io.FileInputStream(configurationMap.get(&quot;staging-settings&quot;));
+  var aedStagingRepo = new Packages.com.philips.hsc.external.staging.AedStagingRepository(stagingConfigStream);
+  return aedStagingRepo;
+}
+
+function prepareRegistryItem(messageId) {
+  var registryItem = globalChannelMap.get(messageId);
+  registryItem.setProcessingStatus(&quot;processed&quot;);
+  return registryItem;
+}</script>
+      </properties>
+      <transformer version="3.6.1">
+        <elements/>
+        <inboundTemplate encoding="base64"></inboundTemplate>
+        <outboundTemplate encoding="base64"></outboundTemplate>
+        <inboundDataType>JSON</inboundDataType>
+        <outboundDataType>JSON</outboundDataType>
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.json.JSONDataTypeProperties" version="3.6.1">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.json.JSONBatchProperties" version="3.6.1">
+            <splitType>JavaScript</splitType>
+            <batchScript></batchScript>
+          </batchProperties>
+        </inboundProperties>
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.json.JSONDataTypeProperties" version="3.6.1">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.json.JSONBatchProperties" version="3.6.1">
+            <splitType>JavaScript</splitType>
+            <batchScript></batchScript>
+          </batchProperties>
+        </outboundProperties>
+      </transformer>
+      <responseTransformer version="3.6.1">
+        <elements/>
+        <inboundDataType>JSON</inboundDataType>
+        <outboundDataType>JSON</outboundDataType>
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.json.JSONDataTypeProperties" version="3.6.1">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.json.JSONBatchProperties" version="3.6.1">
+            <splitType>JavaScript</splitType>
+            <batchScript></batchScript>
+          </batchProperties>
+        </inboundProperties>
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.json.JSONDataTypeProperties" version="3.6.1">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.json.JSONBatchProperties" version="3.6.1">
+            <splitType>JavaScript</splitType>
+            <batchScript></batchScript>
+          </batchProperties>
+        </outboundProperties>
+      </responseTransformer>
+      <filter version="3.6.1">
+        <elements/>
+      </filter>
+      <transportName>JavaScript Writer</transportName>
+      <mode>DESTINATION</mode>
+      <enabled>true</enabled>
+      <waitForPrevious>true</waitForPrevious>
+    </connector>
+  </destinationConnectors>
+  <preprocessingScript>// Modify the message variable below to pre process data
+return message;</preprocessingScript>
+  <postprocessingScript>// This script executes once after a message has been processed
+// Responses returned from here will be stored as &quot;Postprocessor&quot; in the response map
+return;</postprocessingScript>
+  <deployScript>// This script executes once when the channel is deployed
+// You only have access to the globalMap and globalChannelMap here to persist data
+return;</deployScript>
+  <undeployScript>// This script executes once when the channel is undeployed
+// You only have access to the globalMap and globalChannelMap here to persist data
+return;</undeployScript>
+  <properties version="3.6.1">
+    <clearGlobalChannelMap>true</clearGlobalChannelMap>
+    <messageStorageMode>DEVELOPMENT</messageStorageMode>
+    <encryptData>false</encryptData>
+    <removeContentOnCompletion>false</removeContentOnCompletion>
+    <removeOnlyFilteredOnCompletion>false</removeOnlyFilteredOnCompletion>
+    <removeAttachmentsOnCompletion>false</removeAttachmentsOnCompletion>
+    <initialState>STARTED</initialState>
+    <storeAttachments>true</storeAttachments>
+    <metaDataColumns>
+      <metaDataColumn>
+        <name>SOURCE</name>
+        <type>STRING</type>
+        <mappingName>mirth_source</mappingName>
+      </metaDataColumn>
+      <metaDataColumn>
+        <name>TYPE</name>
+        <type>STRING</type>
+        <mappingName>mirth_type</mappingName>
+      </metaDataColumn>
+    </metaDataColumns>
+    <attachmentProperties version="3.6.1">
+      <type>None</type>
+      <properties/>
+    </attachmentProperties>
+    <resourceIds class="linked-hash-map">
+      <entry>
+        <string>Default Resource</string>
+        <string>[Default Resource]</string>
+      </entry>
+    </resourceIds>
+  </properties>
+  <exportData>
+    <metadata>
+      <enabled>true</enabled>
+      <lastModified>
+        <time>1539670526379</time>
+        <timezone>Asia/Calcutta</timezone>
+      </lastModified>
+      <pruningSettings>
+        <archiveEnabled>true</archiveEnabled>
+      </pruningSettings>
+    </metadata>
+  </exportData>
+</channel>
