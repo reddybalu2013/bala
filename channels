@@ -1,0 +1,9 @@
+import "/opt/mirth-connect/channels/new-aed-staging-channel.xml" force
+import "/opt/mirth-connect/channels/modified-aed-staging-channel.xml" force
+import "/opt/mirth-connect/channels/aed-storing-channel.xml" force
+channel enable "new-aed-staging-channel"
+channel enable "modified-aed-staging-channel"
+channel enable "aed-storing-channel"
+channel deploy "new-aed-staging-channel"
+channel deploy "modified-aed-staging-channel"
+channel deploy "aed-storing-channel"
